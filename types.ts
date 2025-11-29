@@ -1,7 +1,7 @@
 export interface TripPreferences {
   destination: string;
   days: number;
-  budget: string;
+  budget: 'Budget' | 'Standard' | 'Luxury';
   interests: string[];
   month: string;
 }
@@ -26,6 +26,17 @@ export interface BudgetBreakdown {
   total: number;
 }
 
+export interface Hotel {
+  name: string;
+  description: string;
+  price_range: string;
+}
+
+export interface Place {
+  name: string;
+  description: string;
+}
+
 export interface TripPlan {
   destination: string;
   duration: string;
@@ -33,18 +44,12 @@ export interface TripPlan {
   best_month_analysis: string;
   itinerary: ItineraryDay[];
   budget: BudgetBreakdown;
-  hotels: { name: string; description: string; price_range: string }[];
-  places_to_visit: { name: string; description: string }[];
+  hotels: Hotel[];
+  places_to_visit: Place[];
   food_recommendations: string[];
   packing_list: string[];
   travel_tips: string[];
 }
 
 export type ViewState = 'FORM' | 'LOADING' | 'RESULT' | 'ERROR';
-
-export interface AppState {
-  view: ViewState;
-  preferences: TripPreferences;
-  tripPlan: TripPlan | null;
-  error: string | null;
-}
+export type ToastType = 'success' | 'info' | 'error';

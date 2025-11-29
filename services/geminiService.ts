@@ -1,23 +1,20 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { TripPreferences, TripPlan } from "../types";
 
-const API_KEY = process.env.API_KEY || '';
-
-// Define the structured output schema strictly
-const tripSchema: Schema = {
+const tripSchema = {
   type: Type.OBJECT,
   properties: {
-    destination: { type: Type.STRING, description: "Confirmed destination name" },
-    duration: { type: Type.STRING, description: "Total duration string (e.g., '5 Days')" },
-    summary: { type: Type.STRING, description: "A catchy summary of the trip" },
-    best_month_analysis: { type: Type.STRING, description: "Analysis of visiting in the selected month vs cheapest month" },
+    destination: { type: Type.STRING },
+    duration: { type: Type.STRING },
+    summary: { type: Type.STRING },
+    best_month_analysis: { type: Type.STRING },
     itinerary: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
           day: { type: Type.INTEGER },
-          title: { type: Type.STRING, description: "Theme of the day" },
+          title: { type: Type.STRING },
           activities: { type: Type.ARRAY, items: { type: Type.STRING } },
           meals: {
             type: Type.OBJECT,
@@ -32,13 +29,13 @@ const tripSchema: Schema = {
     budget: {
       type: Type.OBJECT,
       properties: {
-        accommodation: { type: Type.NUMBER, description: "Estimated cost for stay" },
-        food: { type: Type.NUMBER, description: "Estimated cost for food" },
-        transportation: { type: Type.NUMBER, description: "Estimated cost for travel" },
-        activities: { type: Type.NUMBER, description: "Estimated cost for entry fees/tours" },
-        misc: { type: Type.NUMBER, description: "Estimated buffer money" },
-        currency: { type: Type.STRING, description: "Local currency code (e.g. USD, EUR, JPY)" },
-        total: { type: Type.NUMBER, description: "Total estimated cost" }
+        accommodation: { type: Type.NUMBER },
+        food: { type: Type.NUMBER },
+        transportation: { type: Type.NUMBER },
+        activities: { type: Type.NUMBER },
+        misc: { type: Type.NUMBER },
+        currency: { type: Type.STRING },
+        total: { type: Type.NUMBER }
       }
     },
     hotels: {
@@ -66,36 +63,23 @@ const tripSchema: Schema = {
     packing_list: { type: Type.ARRAY, items: { type: Type.STRING } },
     travel_tips: { type: Type.ARRAY, items: { type: Type.STRING } }
   },
-  required: [
-    "destination", "duration", "summary", "best_month_analysis", "itinerary", 
-    "budget", "hotels", "places_to_visit", "food_recommendations", "packing_list", "travel_tips"
-  ]
+  required: ["destination", "summary", "itinerary", "budget"]
 };
 
 export const generateTripPlan = async (prefs: TripPreferences): Promise<TripPlan> => {
-  if (!API_KEY) {
-    throw new Error("API Key is missing. Please set REACT_APP_GEMINI_API_KEY or process.env.API_KEY.");
-  }
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API Key is missing.");
 
-  const ai = new GoogleGenAI({ apiKey: API_KEY });
-
+  const ai = new GoogleGenAI({ apiKey });
+  
   const prompt = `
-    Act as a world-class travel planner. Create a detailed travel itinerary for a trip to ${prefs.destination}.
+    Create a ${prefs.days}-day ${prefs.budget} style trip to ${prefs.destination} in ${prefs.month}.
+    Interests: ${prefs.interests.join(", ")}.
     
-    Details:
-    - Duration: ${prefs.days} days
-    - Budget Level: ${prefs.budget}
-    - Month of Travel: ${prefs.month}
-    - Interests: ${prefs.interests.join(", ")}
-    
-    Requirements:
-    1. Provide a day-by-day itinerary with morning, afternoon, and evening activities.
-    2. Suggest 3 hotels fitting the budget.
-    3. Breakdown the budget realistically in the local currency or USD.
-    4. Compare the selected travel month with the cheapest/best time to visit.
-    5. Include specific food recommendations and packing tips.
-    
-    Return the response strictly in JSON format matching the schema.
+    Return STRICT JSON.
+    - Currency: Use the destination's local currency code.
+    - Budget: Realistic numbers for 2025.
+    - Itinerary: Detailed and logical flow.
   `;
 
   try {
@@ -109,12 +93,13 @@ export const generateTripPlan = async (prefs: TripPreferences): Promise<TripPlan
       }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
+    let text = response.text || "{}";
+    // Strip markdown if present
+    text = text.replace(/```json|```/g, "").trim();
     
     return JSON.parse(text) as TripPlan;
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw new Error("Failed to generate itinerary. Please try again.");
+    console.error("AI Error:", error);
+    throw new Error("Failed to generate plan. Please try again.");
   }
 };

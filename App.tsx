@@ -2,89 +2,117 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { TripForm } from './components/TripForm';
 import { TripResult } from './components/TripResult';
+import { AuthModal } from './components/AuthModal';
+import { Toast, ToastType } from './components/Toast';
 import { generateTripPlan } from './services/geminiService';
-import { TripPreferences, TripPlan, ViewState } from './types';
-import { AlertTriangle, Plane } from 'lucide-react';
+import { TripPlan, TripPreferences, ViewState } from './types';
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
   const [view, setView] = useState<ViewState>('FORM');
+  const [darkMode, setDarkMode] = useState(false);
+  const [user, setUser] = useState<{name: string} | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const [tripPlan, setTripPlan] = useState<TripPlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Toast State
+  const [toast, setToast] = useState<{ msg: string; type: ToastType; visible: boolean }>({
+    msg: '', type: 'info', visible: false
+  });
 
+  const showToast = (msg: string, type: ToastType) => {
+    setToast({ msg, type, visible: true });
+  };
+  
+  // Persistence & Init
   useEffect(() => {
-    // Check system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setDarkMode(true);
-    }
+    const theme = localStorage.getItem('theme');
+    if (theme === 'dark') setDarkMode(true);
+    
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) setUser(JSON.parse(savedUser));
   }, []);
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   const handleFormSubmit = async (prefs: TripPreferences) => {
     setView('LOADING');
-    setError(null);
     try {
       const plan = await generateTripPlan(prefs);
       setTripPlan(plan);
       setView('RESULT');
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Something went wrong. Please check your API key and try again.");
+      showToast(err.message || 'Something went wrong', 'error');
       setView('ERROR');
     }
   };
 
-  const handleReset = () => {
-    setTripPlan(null);
-    setView('FORM');
-    setError(null);
+  const handleFeatureClick = (feature: string) => {
+    showToast(`${feature} booking is coming soon!`, 'info');
+  };
+
+  const handleLogin = (name: string) => {
+    setUser({name});
+    localStorage.setItem('user', JSON.stringify({name}));
+    showToast(`Welcome back, ${name}!`, 'success');
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+    showToast('Signed out successfully', 'info');
   };
 
   return (
-    <Layout darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
+    <Layout
+      darkMode={darkMode}
+      toggleDarkMode={() => setDarkMode(!darkMode)}
+      user={user}
+      onSignIn={() => setAuthOpen(true)}
+      onSignOut={handleSignOut}
+      onNavigate={() => setView('FORM')}
+      onFeatureClick={handleFeatureClick}
+    >
+      <AuthModal 
+        isOpen={authOpen} 
+        onClose={() => setAuthOpen(false)} 
+        onLogin={handleLogin}
+      />
+
+      <Toast 
+        message={toast.msg} 
+        type={toast.type} 
+        isVisible={toast.visible} 
+        onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
+      />
+
       {view === 'FORM' && (
-        <div className="animate-slide-up">
-          <TripForm onSubmit={handleFormSubmit} isLoading={false} />
-        </div>
+        <TripForm onSubmit={handleFormSubmit} isLoading={false} />
       )}
 
       {view === 'LOADING' && (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-           <div className="relative w-32 h-32 mb-8">
-              {/* Outer Ring */}
-              <div className="absolute inset-0 border-4 border-slate-200 dark:border-slate-700 rounded-full"></div>
-              {/* Spinning Ring */}
-              <div className="absolute inset-0 border-4 border-brand-500 rounded-full border-t-transparent animate-spin"></div>
-              {/* Plane Icon */}
-              <div className="absolute inset-0 flex items-center justify-center animate-pulse">
-                <Plane className="w-12 h-12 text-brand-600 transform -rotate-45" />
-              </div>
-           </div>
-           <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Preparing for Takeoff...</h2>
-           <p className="text-slate-500 dark:text-slate-400">Curating the perfect itinerary for you.</p>
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-brand-600 rounded-full animate-spin mb-6"></div>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Planning your trip...</h2>
+          <p className="text-slate-500 mt-2">Our AI is checking flights, hotels, and local gems.</p>
         </div>
       )}
 
       {view === 'RESULT' && tripPlan && (
-        <TripResult plan={tripPlan} onReset={handleReset} />
+        <TripResult plan={tripPlan} onReset={() => setView('FORM')} />
       )}
 
       {view === 'ERROR' && (
-        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6">
-          <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-full mb-6 border border-red-100 dark:border-red-900/30">
-            <AlertTriangle className="w-10 h-10 text-red-500" />
+        <div className="flex flex-col items-center justify-center min-h-[50vh] px-4 text-center">
+          <div className="bg-red-100 dark:bg-red-900/30 p-4 rounded-full mb-4">
+            <span className="text-4xl">⚠️</span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Flight Delayed</h2>
-          <p className="text-slate-600 dark:text-slate-300 max-w-md mb-8">{error}</p>
-          <button 
-            onClick={handleReset}
-            className="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/20 font-semibold"
-          >
-            Try Again
-          </button>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Trip Planning Failed</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md">We couldn't generate your itinerary at this moment.</p>
+          <button onClick={() => setView('FORM')} className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700">Try Again</button>
         </div>
       )}
     </Layout>
